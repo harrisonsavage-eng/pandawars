@@ -365,7 +365,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
         <span class="gt">HP</span>
         <div class="bw"><div class="bar" id="hpb" style="width:100%"></div></div>
         <div class="bw"><div class="bar" id="shb" style="width:100%"></div></div>
-        <span class="gt" id="g-wpn">Butter Knife</span>
+        <span class="gt" id="g-wpn">—</span>
         <span class="gt sm2" id="g-ammo">Ammo: 30/30</span>
       </div>
       <div class="gcol r">
@@ -382,7 +382,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
       <div class="wpn-slot" id="slot1"><span id="slot1-e">—</span><span class="wpn-slot-ammo" id="slot1-a"></span></div>
       <div class="wpn-slot" id="slot2"><span id="slot2-e">—</span><span class="wpn-slot-ammo" id="slot2-a"></span></div>
     </div>
-    <div id="chint">WASD/joystick=move · SPACE/🔴=shoot · E=loot/heal · R=reload · F=enter/exit vehicle</div>
+    <div id="chint">WASD/L-stick=move · SPACE/RT=shoot · E/X=loot · R/B=reload · F/Y=vehicle</div>
     <div id="govl">
       <div style="font-size:50px">🐼🍳</div>
       <h2 style="color:#fff">PANDA WARS: CHEF SEASON</h2>
@@ -402,7 +402,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
       </div>
     </div>
     <!-- VEHICLE HUD -->
-    <div id="vehicle-hud">🚗 In Vehicle — F to exit · SPACE to boost</div>
+    <div id="vehicle-hud">🚗 In Vehicle — press Y/Triangle or F to exit</div>
+    <div id="gamepad-indicator" style="display:none;position:absolute;top:56px;right:14px;background:rgba(0,0,0,.6);color:#EF9F27;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;pointer-events:none;border:1px solid rgba(239,159,39,.3)">🎮 Controller connected</div>
     <!-- MOBILE CONTROLS -->
     <div id="mobile-controls">
       <div class="joy-zone" id="joy-zone">
@@ -707,8 +708,14 @@ var ALL_WEAPONS_BY_SEASON = {
 var WEAPONS = ALL_WEAPONS_BY_SEASON[CURRENT_SEASON.id];
 
 function getWpn(id){return WEAPONS.find(function(w){return w.id===id;})||WEAPONS[0];}
-function mkW(idx){var w=WEAPONS[idx];return {id:w.id,name:w.name,emoji:w.emoji,type:w.type,dmg:w.dmg,rate:w.rate,maxAmmo:w.maxAmmo,range:w.range,spd:w.spd,bullet:w.bullet,aoe:w.aoe,homing:w.homing,rarity:w.rarity,ammo:w.maxAmmo};}
-function mkWbyId(id){var idx=WEAPONS.findIndex(function(w){return w.id===id;});return mkW(idx<0?0:idx);}
+function mkW(idx){
+  var w=WEAPONS[idx]||WEAPONS[0];
+  return {id:w.id,name:w.name,emoji:w.emoji,type:w.type,dmg:w.dmg,rate:w.rate,maxAmmo:w.maxAmmo,range:w.range,spd:w.spd,bullet:w.bullet,aoe:w.aoe,homing:w.homing,rarity:w.rarity,ammo:w.maxAmmo};
+}
+function mkWbyId(id){
+  var idx=WEAPONS.findIndex(function(w){return w.id===id;});
+  return mkW(idx<0?0:idx);
+}
 
 var RARITY_COL={common:'var(--muted)',rare:'var(--blue)',epic:'var(--purple)',legendary:'var(--gold)'};
 var TYPE_MAP={melee:'type-melee',ranged:'type-ranged',thrown:'type-thrown',explosive:'type-explosive',magic:'type-magic'};
@@ -1231,6 +1238,8 @@ function makeVehicles(){
   return out;
 }
 
+
+
 // HEAL ITEMS - scattered across map
 var HEAL_TYPES=[
   {id:'bandage',  name:'Bandage',     emoji:'🩹', amount:25,  col:'#ff8888', desc:'+25 HP'},
@@ -1258,7 +1267,11 @@ function makeHealItems(){
   return out;
 }
 
-function makeInv(wpnId){return [mkWbyId(wpnId),null,null];}
+function makeInv(wpnId){
+  // Use provided ID if it exists in current season, otherwise use first weapon
+  var idx=WEAPONS.findIndex(function(w){return w.id===wpnId;});
+  return [mkW(idx<0?0:idx),null,null];
+}
 
 function makePlayer(emoji){
   var p=freePos();
@@ -1367,7 +1380,12 @@ function killEnt(t,byPlayer,owner){
     headOffY:-22,headVY:-7,headRot:0,headRotV:rnd(-.25,.25),
     fallAngle:0,fallSpd:.05,fallen:false,fade:14,timer:0});
   var dropped=t.inv.find(function(w){return w!==null;});
-  if(dropped)gLoot.push({x:t.x+rnd(-20,20),y:t.y+rnd(-20,20),wpnId:dropped.id,alive:true});
+  if(dropped){
+    // Make sure this weapon ID exists in current season before dropping
+    var dropIdx=WEAPONS.findIndex(function(w){return w.id===dropped.id;});
+    var dropId=dropIdx>=0?dropped.id:WEAPONS[0].id;
+    gLoot.push({x:t.x+rnd(-20,20),y:t.y+rnd(-20,20),wpnId:dropId,alive:true});
+  }
   var name=t.name||'Enemy';
   addKF((byPlayer?'🔪 You':'💀 Enemy')+' cooked '+name+'!');
   if(byPlayer){gP.kills++;gMatchKills++;}
@@ -1402,9 +1420,9 @@ function tryMove(e,dx,dy){
 }
 function inStorm(e){return dst(e,{x:SCX,y:SCY})>gStormR;}
 
-function pickupWpn(ent,wpnId){
-  // find empty slot or replace active
-  var w=mkWbyId(wpnId);
+function pickupWpn(ent,wpnId,wpnObj){
+  // Accept either a weapon ID string or a direct weapon object
+  var w=wpnObj?wpnObj:mkWbyId(wpnId);
   for(var i=0;i<3;i++){if(ent.inv[i]===null){ent.inv[i]=w;return i;}}
   ent.inv[ent.activeSlot]=w;return ent.activeSlot;
 }
@@ -1437,16 +1455,13 @@ function gUpdate(dt){
   var mx=(gKeys['ArrowLeft']||gKeys['a']||gKeys['A'])?-1:(gKeys['ArrowRight']||gKeys['d']||gKeys['D'])?1:0;
   var my=(gKeys['ArrowUp']||gKeys['w']||gKeys['W'])?-1:(gKeys['ArrowDown']||gKeys['s']||gKeys['S'])?1:0;
 
-  // ── VEHICLE LOGIC ────────────────────────────────────────────
-  // F key or mobile vehicle btn = enter/exit
-  if((gKeys['f']||gKeys['F'])&&!gKeys['_fHeld']){
+    // ── VEHICLE LOGIC ────────────────────────────────────────────
+  if((gKeys['f']||gKeys['F']||gKeys['_gpF'])&&!gKeys['_fHeld']){
     gKeys['_fHeld']=true;
     if(gInVehicle){
-      // Exit vehicle
       gInVehicle.rider=null;gInVehicle=null;
       el('vehicle-hud').style.display='none';
     } else {
-      // Find nearest vehicle
       var nearV=null,nearVD=9999;
       for(var vi=0;vi<gVehicles.length;vi++){
         var vv=gVehicles[vi];
@@ -1457,7 +1472,7 @@ function gUpdate(dt){
       if(nearV){gInVehicle=nearV;nearV.rider=gP;el('vehicle-hud').style.display='block';}
     }
   }
-  if(!gKeys['f']&&!gKeys['F'])gKeys['_fHeld']=false;
+  if(!gKeys['f']&&!gKeys['F']&&!gKeys['_gpF'])gKeys['_fHeld']=false;
 
   if(gInVehicle){
     // Riding — move at vehicle speed, player pos follows vehicle
@@ -1507,7 +1522,7 @@ function gUpdate(dt){
         ch.alive=false;
         var slot=pickupWpn(gP,ch.wpnId);
         addParts(ch.x,ch.y,'#EF9F27',12,4);
-        addKF('Opened chest: got '+mkWbyId(ch.wpnId).name+'!');
+        var _cw=mkWbyId(ch.wpnId);addKF('Opened chest: got '+(_cw?_cw.name:'weapon')+'!');
         break;
       }
     }
@@ -1516,7 +1531,7 @@ function gUpdate(dt){
       if(lt.alive&&dst(gP,lt)<36){
         lt.alive=false;
         pickupWpn(gP,lt.wpnId);
-        addKF('Picked up '+mkWbyId(lt.wpnId).name);
+        var _lw=mkWbyId(lt.wpnId);addKF('Picked up '+(_lw?_lw.name:'item'));
         break;
       }
     }
@@ -1696,6 +1711,7 @@ function gUpdate(dt){
   gCamX=Math.max(0,Math.min(PW-GW,gP.x-GW/2));
   gCamY=Math.max(0,Math.min(PH-GH,gP.y-GH/2));
 
+
   if(gP.hp<=0&&!gOver){gOver=true;setTimeout(function(){endGame(false);},700);}
   var aliveN=gBots.filter(function(b){return !b.dead;}).length+1;
   if(aliveN===1&&!gOver){gOver=true;setTimeout(function(){endGame(true);},700);}
@@ -1833,7 +1849,7 @@ function gRender(){
     ctx.globalAlpha=glow;ctx.font='20px serif';ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillText('📦',csx2,csy2);ctx.globalAlpha=1;
     ctx.fillStyle='rgba(255,200,50,.6)';ctx.font='8px Nunito,sans-serif';ctx.textAlign='center';
-    ctx.fillText(mkWbyId(ch.wpnId).emoji,csx2,csy2-16);
+    var _ce=mkWbyId(ch.wpnId);ctx.fillText(_ce?_ce.emoji:'🎁',csx2,csy2-16);
   }
 
   // loot
@@ -1841,8 +1857,8 @@ function gRender(){
     var lt=gLoot[li];if(!lt.alive)continue;
     var lsx=lt.x-gCamX,lsy=lt.y-gCamY;
     if(lsx<-30||lsx>GW+30||lsy<-30||lsy>GH+30)continue;
-    ctx.font='16px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(mkWbyId(lt.wpnId).emoji,lsx,lsy);
-    ctx.fillStyle='rgba(255,255,180,.7)';ctx.font='8px Nunito,sans-serif';ctx.fillText(mkWbyId(lt.wpnId).name,lsx,lsy-14);
+    ctx.font='16px serif';ctx.textAlign='center';ctx.textBaseline='middle';var _le=mkWbyId(lt.wpnId);ctx.fillText(_le?_le.emoji:'📦',lsx,lsy);
+    ctx.fillStyle='rgba(255,255,180,.7)';ctx.font='8px Nunito,sans-serif';ctx.fillText(_le?_le.name:'item',lsx,lsy-14);
   }
 
   // heal items
@@ -2052,6 +2068,8 @@ function gRender(){
 
   // blind overlay
   if(gP.blind>0){ctx.fillStyle='rgba(255,255,200,'+Math.min(.85,gP.blind*.7)+')';ctx.fillRect(0,0,GW,GH);}
+
+
   if(inStorm(gP)){
     // Pulsing red damage overlay when in storm
     ctx.fillStyle='rgba(200,0,0,'+Math.min(0.35, gInStormFlash*0.35)+')';
@@ -2159,6 +2177,84 @@ document.addEventListener('keydown',function(e){
 });
 document.addEventListener('keyup',function(e){gKeys[e.key]=false;});
 el('g-start').addEventListener('click',startGame);
+
+// ── GAMEPAD / CONSOLE CONTROLLER SUPPORT ─────────────────────
+// Works with Xbox, PlayStation, Switch Pro, and generic gamepads
+var gpState={shooting:false,actionHeld:false,vehicleHeld:false,reloadHeld:false,prevStart:false};
+
+function pollGamepad(){
+  var gpads=navigator.getGamepads?navigator.getGamepads():[];
+  var gp=null;
+  for(var i=0;i<gpads.length;i++){if(gpads[i]&&gpads[i].connected){gp=gpads[i];break;}}
+  if(!gp){requestAnimationFrame(pollGamepad);return;}
+
+  var axes=gp.axes;
+  var btns=gp.buttons;
+  function btn(i){return btns[i]&&(btns[i].pressed||btns[i].value>0.5);}
+
+  // ── LEFT STICK — movement (axes 0,1) ──
+  var lx=Math.abs(axes[0])>0.15?axes[0]:0;
+  var ly=Math.abs(axes[1])>0.15?axes[1]:0;
+  // D-pad as fallback (buttons 12-15 on standard mapping)
+  var dpU=btn(12),dpD=btn(13),dpL=btn(14),dpR=btn(15);
+  gKeys['a']= lx<-0.15||dpL;
+  gKeys['d']= lx>0.15||dpR;
+  gKeys['w']= ly<-0.15||dpU;
+  gKeys['s']= ly>0.15||dpD;
+
+  // ── RIGHT STICK — aim direction (axes 2,3) ──
+  // Shoot when right trigger or A/Cross pressed
+  // Xbox: A=0, B=1, X=2, Y=3, LB=4, RB=5, LT=6, RT=7
+  // PlayStation: Cross=0, Circle=1, Square=2, Triangle=3
+  var rtPressed=btn(7)||btn(5)||(btns[7]&&btns[7].value>0.2); // RT or RB
+  var aPressed=btn(0); // A / Cross — shoot
+  gKeys[' ']=rtPressed||aPressed;
+
+  // B/Circle = reload
+  var bPressed=btn(1);
+  if(bPressed&&!gpState.reloadHeld){gKeys['r']=true;gpState.reloadHeld=true;}
+  else if(!bPressed){gKeys['r']=false;gpState.reloadHeld=false;}
+
+  // X/Square = loot/heal (E key)
+  var xPressed=btn(2);
+  if(xPressed&&!gpState.actionHeld){gKeys['e']=true;gpState.actionHeld=true;}
+  else if(!xPressed){gKeys['e']=false;gpState.actionHeld=false;}
+
+  // Y/Triangle = enter/exit vehicle (F key)
+  var yPressed=btn(3);
+  gKeys['_gpF']=yPressed;
+
+  // LB/L1 = swap weapon left, RB/R1 = swap weapon right
+  if(btn(4)){gP&&(gP.activeSlot=Math.max(0,gP.activeSlot-1));}
+  if(btn(5)&&!rtPressed){gP&&(gP.activeSlot=Math.min(2,gP.activeSlot+1));}
+
+  // Start/Options = pause/back to home (button 9)
+  var startNow=btn(9);
+  if(startNow&&!gpState.prevStart&&gOver===false){
+    // back to home
+    if(gFrm)cancelAnimationFrame(gFrm);
+    showScreen('s-home');enterHome();
+  }
+  gpState.prevStart=startNow;
+
+  // Show on-screen gamepad indicator
+  var gpi=el('gamepad-indicator');
+  if(gpi)gpi.style.display='block';
+
+  requestAnimationFrame(pollGamepad);
+}
+
+// Start polling when gamepad connected
+window.addEventListener('gamepadconnected',function(e){
+  console.log('Gamepad connected:',e.gamepad.id);
+  var gpi=el('gamepad-indicator');
+  if(gpi){gpi.textContent='🎮 '+e.gamepad.id.split('(')[0].trim();gpi.style.display='block';}
+  pollGamepad();
+});
+window.addEventListener('gamepaddisconnected',function(e){
+  var gpi=el('gamepad-indicator');
+  if(gpi)gpi.style.display='none';
+});
 
 // ── MOBILE CONTROLS ──────────────────────────────────────────
 var joyActive=false,joyId=null,joyBaseX=0,joyBaseY=0;

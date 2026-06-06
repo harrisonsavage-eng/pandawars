@@ -1,13 +1,9 @@
 {
   "name": "panda-wars",
-  "version": "1.0.0",
-  "description": "Panda Wars - Chef Season Battle Royale",
+  "version": "3.0.0",
+  "description": "Panda Wars — Ninja Season Battle Royale",
   "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {},
-  "engines": {
-    "node": ">=18"
-  }
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "ws": "^8.17.0" },
+  "engines": { "node": ">=18" }
 }
